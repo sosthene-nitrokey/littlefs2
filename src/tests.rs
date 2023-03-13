@@ -480,12 +480,16 @@ fn test_iter_dirs() {
             file.set_len(37)?;
             fs.create_file_and_then(b"/tmp/file.b\0".try_into()?, |file| file.set_len(42))
         })?;
+        let mut tells = Vec::new();
 
-        fs.read_dir_and_then(b"/tmp\0".try_into()?, |dir| {
+        fs.read_dir_and_then(b"/tmp\0".try_into()?, |mut dir| {
             let mut found_files: usize = 0;
             let mut sizes = [0usize; 4];
+            let mut i = 0;
 
-            for (i, entry) in dir.enumerate() {
+            tells.push(dir.tell()?);
+            while let Some(entry) = dir.next() {
+                tells.push(dir.tell()?);
                 let entry = entry?;
 
                 // assert_eq!(entry.file_name(), match i {
@@ -498,13 +502,31 @@ fn test_iter_dirs() {
 
                 sizes[i] = entry.metadata().len();
                 found_files += 1;
+                i += 1;
             }
 
             assert_eq!(sizes, [0, 0, 37, 42]);
             assert_eq!(found_files, 4);
 
+            for (i, tell) in tells.iter().enumerate() {
+                dir.rewind().unwrap();
+                let mut found_files: usize = 0;
+                let mut sizes = Vec::new();
+                dir.seek(*tell)?;
+
+                for entry in &mut dir {
+                    let entry = entry?;
+                    sizes.push(entry.metadata().len());
+                    found_files += 1;
+                }
+
+                assert_eq!(sizes, [0, 0, 37, 42][i..]);
+                assert_eq!(found_files, 4 - i);
+            }
             Ok(())
         })
+        .unwrap();
+        Ok(())
     })
     .unwrap();
 }
