@@ -143,6 +143,7 @@ pub mod driver;
 pub mod fs;
 pub mod io;
 pub mod path;
+pub mod pinned;
 
 /// get information about the C backend
 pub fn version() -> Version {

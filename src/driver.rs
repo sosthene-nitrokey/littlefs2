@@ -23,7 +23,6 @@ use crate::{
 /// Once that's done, we can get rid of `generic-array`s, and replace the
 /// `*_SIZE` types with `usize`s.
 pub trait Storage {
-
     // /// Error type for user-provided read/write/erase methods
     // type Error = usize;
 
@@ -96,6 +95,24 @@ pub trait Storage {
     fn erase(&mut self, off: usize, len: usize) -> Result<usize>;
     // /// Synchronize writes to the storage device.
     // fn sync(&mut self) -> Result<usize>;
+}
+impl<'a, S: Storage> Storage for &'a mut S {
+    const READ_SIZE: usize = S::READ_SIZE;
+    const WRITE_SIZE: usize = S::WRITE_SIZE;
+    const BLOCK_SIZE: usize = S::BLOCK_SIZE;
+    const BLOCK_COUNT: usize = S::BLOCK_COUNT;
+    const BLOCK_CYCLES: isize = S::BLOCK_CYCLES;
+    type CACHE_SIZE = S::CACHE_SIZE;
+    type LOOKAHEAD_SIZE = S::LOOKAHEAD_SIZE;
+    fn read(&mut self, off: usize, buf: &mut [u8]) -> Result<usize> {
+        S::read(self, off, buf)
+    }
+    fn write(&mut self, off: usize, data: &[u8]) -> Result<usize> {
+        S::write(self, off, data)
+    }
+    fn erase(&mut self, off: usize, len: usize) -> Result<usize> {
+        S::erase(self, off, len)
+    }
 }
 
 // in the future, try to split the megatrait `Storage` into pieces
