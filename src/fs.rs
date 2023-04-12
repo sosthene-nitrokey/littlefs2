@@ -223,6 +223,11 @@ impl From<ll::lfs_info> for Metadata
     }
 }
 
+struct RemoveDirAllProgress {
+    files_removed: usize,
+    skipped_any: bool,
+}
+
 impl<Storage: driver::Storage> Filesystem<'_, Storage> {
 
     pub fn allocate() -> Allocation<Storage> {
@@ -315,14 +320,21 @@ impl<Storage: driver::Storage> Filesystem<'_, Storage> {
         self.remove_dir_all_where(path, &|_| true).map(|_| ())
     }
 
-    #[cfg(feature = "dir-entry-path")]
-    pub fn remove_dir_all_where<P>(&self, path: &Path, predicate: &P) -> Result<usize>
+    /// Returns number of deleted files + whether the directory was fully deleted or not
+    fn remove_dir_all_where_inner<P>(
+        &self,
+        path: &Path,
+        predicate: &P,
+    ) -> Result<RemoveDirAllProgress>
     where
         P: Fn(&DirEntry) -> bool,
     {
         if !path.exists(self) {
             debug_now!("no such directory {}, early return", path);
-            return Ok(0);
+            return Ok(RemoveDirAllProgress {
+                files_removed: 0,
+                skipped_any: false,
+            });
         }
         let mut skipped_any = false;
         let mut files_removed = 0;
@@ -345,7 +357,9 @@ impl<Storage: driver::Storage> Filesystem<'_, Storage> {
                 }
                 if entry.file_type().is_dir() {
                     debug_now!("recursing into directory {}", &entry.path());
-                    files_removed += self.remove_dir_all_where(entry.path(), predicate)?;
+                    let progress = self.remove_dir_all_where_inner(entry.path(), predicate)?;
+                    files_removed += progress.files_removed;
+                    skipped_any |= progress.skipped_any;
                     debug_now!("...back");
                 }
             }
@@ -356,7 +370,19 @@ impl<Storage: driver::Storage> Filesystem<'_, Storage> {
             self.remove_dir(path)?;
             debug_now!("..worked");
         }
-        Ok(files_removed)
+        Ok(RemoveDirAllProgress {
+            files_removed,
+            skipped_any,
+        })
+    }
+
+    #[cfg(feature = "dir-entry-path")]
+    pub fn remove_dir_all_where<P>(&self, path: &Path, predicate: &P) -> Result<usize>
+    where
+        P: Fn(&DirEntry) -> bool,
+    {
+        self.remove_dir_all_where_inner(path, predicate)
+            .map(|progress| progress.files_removed)
     }
 
     /// Rename or move a file or directory.
