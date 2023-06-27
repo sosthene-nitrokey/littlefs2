@@ -5,6 +5,7 @@ use crate::{
     driver,
     fs::{Attribute, File, Filesystem},
     io::{Error, OpenSeekFrom, Read, Result, SeekFrom},
+    path::PathBuf,
 };
 
 ram_storage!(
@@ -492,13 +493,15 @@ fn test_iter_dirs() {
                 tells.push(dir.tell()?);
                 let entry = entry?;
 
-                // assert_eq!(entry.file_name(), match i {
-                //     0 => b".\0",
-                //     1 => b"..\0",
-                //     2 => b"file.a\0",
-                //     3 => b"file.b\0",
-                //     _ => panic!("oh noes"),
-                // });
+                let expected_name = match i {
+                    0 => PathBuf::from(b".\0".as_slice()),
+                    1 => PathBuf::from(b"..\0".as_slice()),
+                    2 => PathBuf::from(b"file.a\0".as_slice()),
+                    3 => PathBuf::from(b"file.b\0".as_slice()),
+                    _ => panic!("oh noes"),
+                };
+
+                assert_eq!(entry.file_name(), &*expected_name);
 
                 sizes[i] = entry.metadata().len();
                 found_files += 1;
@@ -507,6 +510,7 @@ fn test_iter_dirs() {
 
             assert_eq!(sizes, [0, 0, 37, 42]);
             assert_eq!(found_files, 4);
+            assert_eq!(tells.len(), 5);
 
             for (i, tell) in tells.iter().enumerate() {
                 dir.rewind().unwrap();
